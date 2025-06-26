@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Cadastro</title>
+</head>
+<body>
+  <h2>Cadastro de Usuário</h2>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}
+      <ul>
+        {% for msg in msgs %}
+          <li>{{ msg }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST" action="/save_usuario">
+      <div class="input-group">
+        <span>👤</span>
+        <input type="text" name="nome" placeholder="Nome" required />
+      </div>
+
+      <div class="input-group">
+        <span>📞</span>
+        <input type="tel" name="telefone" placeholder="Telefone" required />
+      </div>
+
+      <div class="input-group">
+        <span>📧</span>
+        <input type="email" name="email" placeholder="E-mail" required />
+      </div>
+
+      <div class="input-group">
+        <span>🔒</span>
+        <input type="password" name="senha" placeholder="Senha" required />
+      </div>
+
+      <div class="input-group">
+        <span>🪪</span>
+        <input type="text" name="documento" placeholder="Documento" required />
+      </div>
+
+      <button type="submit" class="btn">Cadastrar</button>
+    </form>
+
+  <br>
+  <a href="/">Voltar para login</a>
+
+  <script>
+    function toggleSenha() {
+      const inputSenha = document.getElementById('senha');
+      const btn = document.querySelector('.toggle-senha');
+      
+      if (inputSenha.type === 'password') {
+        inputSenha.type = 'text';
+        btn.textContent = '👁️'; // Muda o ícone para "olhos fechados"
+        
+        // Esconde novamente após 5 segundos
+        setTimeout(() => {
+          inputSenha.type = 'password';
+          btn.textContent = '👁️';
+        }, 5000);
+        
+      } else {
+        inputSenha.type = 'password';
+        btn.textContent = '👁️';
+      }
+    }
+  </script>
+</body>
+</div>
+</html>
