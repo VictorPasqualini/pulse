@@ -1,6 +1,6 @@
 from flask import Flask, request, render_template, redirect, url_for, session, flash
-import app.persist_table as persist_table
-import app.login_utils as login_utils
+import app as persist_table
+import app as login_utils
 import pymysql
 
 pymysql.install_as_MySQLdb()
