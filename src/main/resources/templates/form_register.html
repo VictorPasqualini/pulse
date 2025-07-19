@@ -1,76 +1,33 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-<head>
-  <meta charset="UTF-8">
-  <title>Cadastro</title>
-  <link rel="stylesheet" href="../static/css/style_register.css">
-</head>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login</title>
+        <link rel="stylesheet" href="../static/css/style.css">
+        <link rel="stylesheet" href="../static/css/index.css">
+    </head>
 
-  <div class="container">
-  <form class="form">
-  <form method="POST" action="/save_usuario">
-        <div class="field">
-    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-      <path d="M16 8a8 8 0 1 1-16 0 8 8 0 0 1 16 0zM4 7.5a1.5 1.5 0 1 0 3 0A1.5 1.5 0 0 0 4 7.5zM9 7.5a1.5 1.5 0 1 0 3 0A1.5 1.5 0 0 0 9 7.5z"/>
-    </svg>
-    <input autocomplete="off" placeholder="Nome" class="input-field" type="text" name="nome" required>
-  </div>
+    <body>
+    <main>
+        <div class="logo_login">
 
-  <div class="field">
-    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-      <path d="M3.654 1.328a.678.678 0 0 1 .582-.036l2.016.806a.678.678 0 0 1 .381.381l.805 2.016a.678.678 0 0 1-.036.582l-1.106 1.846a.678.678 0 0 1-.541.305L5 6.5l-.75 1.25a.678.678 0 0 1-.541.305L2.164 8.7a.678.678 0 0 1-.582-.036L.746 7.861a.678.678 0 0 1-.305-.541L.5 5.5l-1.25-.75a.678.678 0 0 1-.305-.541L0 2.164a.678.678 0 0 1 .036-.582L.861.746a.678.678 0 0 1 .541-.305L3.5.5l.154-.25z"/>
-    </svg>
-    <input placeholder="Telefone" class="input-field" type="tel" name="telefone" required>
-  </div>
+        </div>
 
-  <div class="field">
-    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-      <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2.5-1a.5.5 0 0 0 0 1H13.5a.5.5 0 0 0 0-1H2.5z"/>
-    </svg>
-    <input placeholder="Email" class="input-field" type="email" name="email" required>
-  </div>
+        <div class="login">
+            <div class="form_login">
+                <label class="label_email">Email: </label>
+                <input class="input_email" type="text">
 
- <div class="field">
-    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-      <path d="M6.5 0a.5.5 0 0 1 .5.5v.5h2V.5a.5.5 0 0 1 1 0v.5h1A1.5 1.5 0 0 1 12.5 2v12a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 2.5 14V2A1.5 1.5 0 0 1 4 0h1v.5a.5.5 0 0 1 1 0v.5h.5zM3 4v10a.5.5 0 0 0 .5.5H12a.5.5 0 0 0 .5-.5V4H3z"/>
-    </svg>
-    <input placeholder="Documento" class="input-field" type="text" name="documento" required>
-  </div>
-  
-  <div class="field">
-    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-      <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2z"/>
-      <path d="M4 8a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H4z"/>
-    </svg>
-    <input placeholder="Senha" class="input-field" type="password" name="senha" required>
-  </div>
+                <label class="label_password">Senha: </label>
+                <input class="input_password" type="password">
 
-  <div class="btn">
-    <button class="button1">Cadastrar</button>
-    <a href="/" class="button2">Voltar para login</a>
-  </div>
+                <button>Entrar</button>
+            </div>
 
-  <script>
-    function toggleSenha() {
-      const inputSenha = document.getElementById('senha');
-      const btn = document.querySelector('.toggle-senha');
-      
-      if (inputSenha.type === 'password') {
-        inputSenha.type = 'text';
-        btn.textContent = '👁️'; // Muda o ícone para "olhos fechados"
-        
-        // Esconde novamente após 5 segundos
-        setTimeout(() => {
-          inputSenha.type = 'password';
-          btn.textContent = '👁️';
-        }, 5000);
-        
-      } else {
-        inputSenha.type = 'password';
-        btn.textContent = '👁️';
-      }
-    }
-  </script>
-</body>
-</div>
+            <footer id="footer"></footer>
+            <script src="../static/js/load_footer.js"></script>
+        </div>
+    </main>
+    </body>
 </html>

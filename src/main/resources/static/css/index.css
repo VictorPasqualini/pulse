@@ -1,0 +1,20 @@
+main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background-color: pink;
+}
+
+.logo_login {
+    padding: 1rem;
+    background-color: blue;
+}
+
+.login {
+    display: grid;
+    grid-template-rows: 4fr 0.5fr;
+    background-color: white;
+}
+
+.form_login {
+    background-color: green;
+}
