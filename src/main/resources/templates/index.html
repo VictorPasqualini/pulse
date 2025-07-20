@@ -16,15 +16,23 @@
             </div>
 
             <div class="login">
-                <div class="form_login">
-                    <label class="label_email">Email: </label>
-                    <input class="input_email" type="text">
+                <form class="form-control" action="">
 
-                    <label class="label_password">Senha: </label>
-                    <input class="input_password" type="password">
+                    <p class="title">Login</p>
 
-                    <button>Entrar</button>
-                </div>
+                    <div class="input-field">
+                        <input required="" class="input" type="text" />
+                        <label class="label" for="input">Enter Email</label>
+                    </div>
+
+                    <div class="input-field">
+                        <input required="" class="input" type="password" />
+                        <label class="label" for="input">Enter Password</label>
+                    </div>
+
+                    <button class="submit-btn">Sign In</button>
+
+                </form>
 
                 <footer id="footer"></footer>
                 <script src="../static/js/load_footer.js"></script>

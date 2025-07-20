@@ -19,13 +19,4 @@ main {
 footer {
     padding: 2rem;
     text-align: right;
-    background-color: gray;
-}
-
-.footer_copyright {
-    background-color: white;
-}
-
-.copyright {
-    background-color: purple;
 }
