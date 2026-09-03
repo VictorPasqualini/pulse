@@ -1,2 +1,18 @@
+node_modules/
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+.env
+.env.local
+.env*.local
+
+# Local runtime state: data-source URL, column mapping, classification rules.
+.pulse/
+
+.DS_Store
+Thumbs.db
 .idea/
-.venv/
+.vscode/

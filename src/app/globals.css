@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Pulse tokens.
+
+   Dark is the app's default and its designed state, so the dark values live on
+   bare :root. Light is a complete, deliberate second set — not an inversion —
+   and wins under an explicit [data-theme="light"] stamp or, absent any stamp,
+   under a light OS preference. Chart colours are NOT here: they come from
+   src/lib/palette.ts so the validator has one place to check.
+--------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #0b0f0e;
+  --bg-accent: #0d1413;
+  --surface-1: #141a18;
+  --surface-2: #1a2220;
+  --surface-3: #212b28;
+
+  --ink: #f1f5f3;
+  --ink-2: #a8b5b1;
+  --ink-3: #77857f;
+
+  --hairline: rgb(241 245 243 / 0.09);
+  --hairline-strong: rgb(241 245 243 / 0.16);
+  --grid: #1f2a27;
+  --axis: #2c3a36;
+
+  --brand: #2fd39b;
+  --brand-dim: #1aa88c;
+  --brand-ink: #04120d;
+  --brand-wash: rgb(47 211 155 / 0.12);
+
+  --good: #35c98f;
+  --bad: #e07b4f;
+  --warn: #d9a13a;
+
+  --pulse-a: #c6ee46;
+  --pulse-b: #23d18f;
+  --pulse-c: #22c4d9;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -16px rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme="dark"])) {
+    color-scheme: light;
+
+    --bg: #f3f6f5;
+    --bg-accent: #ffffff;
+    --surface-1: #fbfcfb;
+    --surface-2: #ffffff;
+    --surface-3: #eef3f1;
+
+    --ink: #0c1413;
+    --ink-2: #4d5b57;
+    --ink-3: #788783;
+
+    --hairline: rgb(12 20 19 / 0.10);
+    --hairline-strong: rgb(12 20 19 / 0.20);
+    --grid: #e3eae7;
+    --axis: #ccd6d3;
+
+    --brand: #0a8f6b;
+    --brand-dim: #0a8f6b;
+    --brand-ink: #ffffff;
+    --brand-wash: rgb(10 143 107 / 0.10);
+
+    --good: #0a8f6b;
+    --bad: #c25a2a;
+    --warn: #a9761b;
+
+    --pulse-a: #86b514;
+  --pulse-b: #0fa572;
+  --pulse-c: #0e93ad;
+
+  --shadow-card: 0 1px 2px rgb(12 20 19 / 0.05), 0 8px 20px -16px rgb(12 20 19 / 0.18);
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f3f6f5;
+  --bg-accent: #ffffff;
+  --surface-1: #fbfcfb;
+  --surface-2: #ffffff;
+  --surface-3: #eef3f1;
+
+  --ink: #0c1413;
+  --ink-2: #4d5b57;
+  --ink-3: #788783;
+
+  --hairline: rgb(12 20 19 / 0.10);
+  --hairline-strong: rgb(12 20 19 / 0.20);
+  --grid: #e3eae7;
+  --axis: #ccd6d3;
+
+  --brand: #0a8f6b;
+  --brand-dim: #0a8f6b;
+  --brand-ink: #ffffff;
+  --brand-wash: rgb(10 143 107 / 0.10);
+
+  --good: #0a8f6b;
+  --bad: #c25a2a;
+  --warn: #a9761b;
+
+  --pulse-a: #86b514;
+  --pulse-b: #0fa572;
+  --pulse-c: #0e93ad;
+
+  --shadow-card: 0 1px 2px rgb(12 20 19 / 0.05), 0 8px 20px -16px rgb(12 20 19 / 0.18);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-accent: var(--bg-accent);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-grid: var(--grid);
+  --color-axis: var(--axis);
+  --color-brand: var(--brand);
+  --color-brand-dim: var(--brand-dim);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-wash: var(--brand-wash);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  --radius-card: 14px;
+  --shadow-card: var(--shadow-card);
+}
+
+* {
+  border-color: var(--hairline);
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Numbers that must line up vertically get tabular figures; standalone hero
+   figures keep the proportional defaults. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--brand-wash);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Thin, unobtrusive scrollbars — the app has a lot of scroll regions. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
