@@ -52,9 +52,29 @@ export async function writeConfig(patch: Partial<PulseConfig>): Promise<PulseCon
   };
 
   await mkdir(DIR, { recursive: true });
-  await writeFile(FILE, JSON.stringify(next, null, 2) + "\n", "utf8");
+  await writeFile(FILE, JSON.stringify({ ...next, rules: pruneRules(next.rules) }, null, 2) + "\n", "utf8");
   cached = next;
   return next;
+}
+
+/**
+ * Only the term lists the user actually changed get written to disk.
+ *
+ * Saving the whole rule set would freeze it: every list on disk wins over
+ * `DEFAULT_RULES`, so a config written today would keep the vocabulary of today
+ * forever, and a term added to the defaults in a later version would silently never
+ * reach anyone who had ever pressed Salvar — including on the source form, which
+ * has nothing to do with rules. Omitting a list means "follow the defaults"; keeping
+ * one means "the user chose this", which is exactly the intent worth persisting.
+ */
+function pruneRules(rules: Rules): Partial<Rules> {
+  const out: Partial<Rules> = {};
+  for (const key of Object.keys(DEFAULT_RULES) as (keyof Rules)[]) {
+    const list = rules[key];
+    const base = DEFAULT_RULES[key];
+    if (list.length !== base.length || list.some((term, i) => term !== base[i])) out[key] = list;
+  }
+  return out;
 }
 
 /** Drop the in-process cache — used by the config form after a save. */
@@ -71,7 +91,8 @@ function reconcile(stored: Partial<PulseConfig>, envSourceUrl?: string): PulseCo
     headerRow:
       typeof stored.headerRow === "number" && stored.headerRow >= 0 ? stored.headerRow : null,
     columns: sanitizeColumns(stored.columns ?? {}),
-    rules: sanitizeRules(stored.rules ?? DEFAULT_RULES),
+    // Each missing list falls back to its default; see pruneRules.
+    rules: sanitizeRules(stored.rules ?? {}),
     updatedAt: stored.updatedAt ?? null,
   };
 }

@@ -17,8 +17,12 @@ type Signals = { exact: string[]; strong: string[]; weak: string[] };
 
 const SIGNALS: Record<Field, Signals> = {
   date: {
-    exact: ["data", "date", "dia"],
-    strong: ["data lancamento", "data do lancamento", "data pagamento", "data compra", "competencia", "vencimento"],
+    // The payment date outranks every other date a sheet may carry. A ledger that
+    // splits a purchase into installments repeats the purchase date on all of them
+    // and moves only the payment date, so mapping "data compra" would pile twelve
+    // installments onto the month the card was swiped.
+    exact: ["data", "date", "dia", "data pagamento", "data de pagamento", "data do pagamento"],
+    strong: ["data lancamento", "data do lancamento", "data compra", "competencia", "vencimento"],
     weak: ["dt", "quando", "periodo"],
   },
   description: {
@@ -47,8 +51,10 @@ const SIGNALS: Record<Field, Signals> = {
     weak: ["mov", "cd"],
   },
   segment: {
-    exact: ["segmento", "categoria", "category", "grupo", "classe"],
-    strong: ["segmentos", "categorias", "rubrica", "area", "centro de custo", "subcategoria"],
+    // "seguimento" is not a typo to correct — it is what a great many Brazilian
+    // spreadsheets call this column, and the app has to read the sheet as written.
+    exact: ["segmento", "seguimento", "categoria", "category", "grupo", "classe"],
+    strong: ["segmentos", "seguimentos", "categorias", "rubrica", "area", "centro de custo", "subcategoria"],
     weak: ["tag", "setor"],
   },
   account: {
@@ -58,7 +64,10 @@ const SIGNALS: Record<Field, Signals> = {
   },
   method: {
     exact: ["forma de pagamento", "forma", "pagamento", "metodo", "meio"],
-    strong: ["meio de pagamento", "metodo de pagamento", "payment", "payment method", "modalidade"],
+    strong: [
+      "meio de pagamento", "metodo de pagamento", "payment", "payment method", "modalidade",
+      "tipo transacao", "tipo de transacao", "tipo pagamento", "tipo de pagamento",
+    ],
     weak: ["como", "via"],
   },
   card: {
@@ -72,9 +81,19 @@ const SIGNALS: Record<Field, Signals> = {
     weak: ["onde", "veiculo"],
   },
   installment: {
+    // "parcelado" is deliberately absent: it is the sim/não flag next to these two,
+    // and it says nothing that `total_parcelas` > 1 does not already say.
     exact: ["parcela", "parcelas", "installment"],
-    strong: ["parcelamento", "n parcelas", "qtd parcelas"],
+    strong: ["parcelamento", "numero da parcela", "n da parcela"],
     weak: ["x"],
+  },
+  installmentTotal: {
+    exact: [
+      "total parcelas", "total de parcelas", "parcelas totais", "qtd parcelas",
+      "quantidade de parcelas", "installments",
+    ],
+    strong: ["n parcelas", "numero de parcelas", "total installments"],
+    weak: [],
   },
   note: {
     exact: ["observacao", "observacoes", "obs", "nota", "notas", "note", "notes"],
@@ -84,7 +103,13 @@ const SIGNALS: Record<Field, Signals> = {
 };
 
 /** Fields that never win by a weak signal alone — too easy to grab a stray column. */
-const STRICT: ReadonlySet<Field> = new Set(["installment", "note", "asset", "card"]);
+const STRICT: ReadonlySet<Field> = new Set([
+  "installment",
+  "installmentTotal",
+  "note",
+  "asset",
+  "card",
+]);
 
 export function normalizeHeader(value: unknown): string {
   return deaccent(String(value ?? ""))

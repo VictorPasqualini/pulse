@@ -69,6 +69,7 @@ export function normalizeRows(
     const asset = str(at(row, columns.asset)) || null;
     const note = str(at(row, columns.note));
     const installment = str(at(row, columns.installment)) || null;
+    const installmentTotal = str(at(row, columns.installmentTotal)) || null;
 
     const cardCell = str(at(row, columns.card));
     const card = cardCell
@@ -95,6 +96,7 @@ export function normalizeRows(
       card,
       asset,
       installment,
+      installmentTotal,
       note,
       sheet: sheetName,
       row: line,

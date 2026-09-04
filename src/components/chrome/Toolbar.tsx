@@ -23,11 +23,16 @@ export function MonthPicker({ months, current }: { months: string[]; current: st
     startTransition(() => router.push(`?${next.toString()}`, { scroll: false }));
   };
 
+  /**
+   * `months` arrives newest-first — the right order for a dropdown, where the month
+   * you want is almost always a recent one, and the wrong order for the arrows: a
+   * lower index is a *newer* month, so walking the index up is walking back in time.
+   * Naming the two neighbours instead of stepping by ±1 keeps ‹ pointing at the past
+   * whichever way the list happens to be sorted.
+   */
   const index = months.indexOf(current);
-  const step = (delta: number) => {
-    const target = months[index + delta];
-    if (target) go(target);
-  };
+  const older = index >= 0 ? months[index + 1] : undefined;
+  const newer = index > 0 ? months[index - 1] : undefined;
 
   return (
     <div
@@ -35,8 +40,8 @@ export function MonthPicker({ months, current }: { months: string[]; current: st
     >
       <button
         type="button"
-        onClick={() => step(-1)}
-        disabled={index <= 0}
+        onClick={() => older && go(older)}
+        disabled={!older}
         aria-label="Mês anterior"
         className="flex h-7 w-7 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
       >
@@ -46,14 +51,19 @@ export function MonthPicker({ months, current }: { months: string[]; current: st
       <label className="sr-only" htmlFor="pulse-month">
         Mês de referência
       </label>
+      {/* The colours are explicit, on the select *and* on every option: the open
+          dropdown is drawn by the browser, and it paints the list in the control's
+          own background. A transparent control means a white list — with white ink
+          on it in dark mode, which is an invisible menu. `color-scheme: dark` does
+          not save it, because a declared background wins over the UA's. */}
       <select
         id="pulse-month"
         value={current}
         onChange={(event) => go(event.target.value)}
-        className="min-w-[9.5rem] appearance-none rounded-md bg-transparent px-2 py-1 text-center text-[13px] font-medium text-ink outline-none"
+        className="min-w-[9.5rem] appearance-none rounded-md bg-surface-1 px-2 py-1 text-center text-[13px] font-medium text-ink outline-none"
       >
         {months.map((month) => (
-          <option key={month} value={month}>
+          <option key={month} value={month} className="bg-surface-1 text-ink">
             {monthLabel(month, "long")}
           </option>
         ))}
@@ -61,8 +71,8 @@ export function MonthPicker({ months, current }: { months: string[]; current: st
 
       <button
         type="button"
-        onClick={() => step(1)}
-        disabled={index < 0 || index >= months.length - 1}
+        onClick={() => newer && go(newer)}
+        disabled={!newer}
         aria-label="Mês seguinte"
         className="flex h-7 w-7 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
       >

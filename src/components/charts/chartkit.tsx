@@ -12,28 +12,27 @@ import {
   type RefObject,
 } from "react";
 import { compact } from "@/lib/money";
+import { BAR_MAX, BAR_RADIUS, MARKER_RADIUS, SURFACE_GAP } from "./specs";
 
 /**
- * The pieces every chart in Pulse is built from.
- *
- * Fixed specs, applied everywhere so the charts read as one system:
- *   bars     ≤ 24px thick, 4px rounded data-end, square at the baseline
- *   lines    2px, round caps and joins
- *   markers  r ≥ 4 with a 2px ring in the surface colour
- *   grid     1px solid, one step off the surface, never dashed
- *   gaps     2px of surface between touching marks
+ * The pieces every chart in Pulse is built from. The mark specs they honour live in
+ * `./specs`, which is importable from the server side too.
  */
-
-export const BAR_MAX = 24;
-export const BAR_RADIUS = 4;
-export const LINE_WIDTH = 2;
-export const MARKER_RADIUS = 4.5;
-export const SURFACE_GAP = 2;
 
 /* ------------------------------------------------------------------ layout */
 
-/** Container width, so bars get real pixel geometry and labels can be measured
- *  before they are placed. */
+/**
+ * Container width, so bars get real pixel geometry and labels can be measured
+ * before they are placed.
+ *
+ * The number is the *content* box, never `clientWidth`: clientWidth counts the
+ * element's own padding, and every chart wrapper here is padded. Feeding that to
+ * the SVG's `width` makes the SVG wider than the box holding it, and inside a
+ * grid track that sizes to its content the overflow widens the track, which
+ * widens the measurement, which widens the SVG — the chart marches off the right
+ * edge, a little further on every frame. `contentRect` is padding-free by
+ * definition, so the loop cannot start.
+ */
 export function useMeasure<T extends HTMLElement>(): [RefObject<T | null>, number] {
   const ref = useRef<T | null>(null);
   const [width, setWidth] = useState(0);
@@ -42,10 +41,14 @@ export function useMeasure<T extends HTMLElement>(): [RefObject<T | null>, numbe
     const node = ref.current;
     if (!node) return;
 
-    const update = () => setWidth(node.clientWidth);
-    update();
+    // First paint, before the observer has anything to report.
+    const style = getComputedStyle(node);
+    const inset = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    setWidth(Math.max(0, node.clientWidth - inset));
 
-    const observer = new ResizeObserver(update);
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(Math.max(0, entry.contentRect.width));
+    });
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
@@ -261,9 +264,20 @@ export function TooltipHost({ children, className }: { children: ReactNode; clas
     return () => window.removeEventListener("keydown", onKey);
   }, [state, hide]);
 
-  const hostWidth = hostRef.current?.clientWidth ?? 0;
+  const host = hostRef.current;
+  const hostWidth = host?.clientWidth ?? 0;
+  const hostHeight = host?.clientHeight ?? 0;
   const PANEL = 208;
   const flip = state ? state.x + PANEL + 16 > hostWidth : false;
+
+  /**
+   * Nothing clips the panel — it is HTML, deliberately, so it can wrap and use the
+   * app's type — which means a mark low in the plot would hang it past the card's
+   * bottom edge. Anchoring by `bottom` for those makes the panel grow upward
+   * instead, and doing it by the point's position rather than the panel's own
+   * height keeps it a pure layout decision with nothing to measure.
+   */
+  const above = state != null && hostHeight > 0 && state.y > hostHeight * 0.55;
 
   return (
     <TooltipContext.Provider value={{ show, hide }}>
@@ -277,7 +291,8 @@ export function TooltipHost({ children, className }: { children: ReactNode; clas
             style={{
               left: flip ? undefined : state.x + 12,
               right: flip ? Math.max(8, hostWidth - state.x + 12) : undefined,
-              top: Math.max(4, state.y - 12),
+              top: above ? undefined : Math.max(4, state.y - 12),
+              bottom: above ? Math.max(4, hostHeight - state.y - 12) : undefined,
             }}
           >
             <p className="mb-1.5 text-[11.5px] font-semibold text-ink">{state.title}</p>

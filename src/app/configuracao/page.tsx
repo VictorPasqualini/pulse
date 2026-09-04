@@ -29,6 +29,7 @@ const FIELD_ORDER: Field[] = [
   "card",
   "asset",
   "installment",
+  "installmentTotal",
   "note",
 ];
 

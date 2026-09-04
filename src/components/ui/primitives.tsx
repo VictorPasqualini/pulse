@@ -12,8 +12,11 @@ export function Card({
   as?: "section" | "div" | "article";
 }) {
   return (
+    // min-w-0: a card is almost always a grid or flex item, and those default to
+    // a min-content floor. Without this, anything that overflows a card — a wide
+    // table, a chart mid-measure — widens the track instead of scrolling inside.
     <Tag
-      className={`rounded-card border border-hairline bg-surface-1 shadow-[var(--shadow-card)] ${className ?? ""}`}
+      className={`min-w-0 rounded-card border border-hairline bg-surface-1 shadow-[var(--shadow-card)] ${className ?? ""}`}
     >
       {children}
     </Tag>

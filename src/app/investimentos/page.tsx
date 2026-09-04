@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { loadDataset } from "@/lib/source";
+import type { InvestPoint } from "@/lib/metrics";
 import { investmentSummary } from "@/lib/metrics";
 import { brl, brlSigned, pct, pctSigned } from "@/lib/money";
 import { monthLabel, relativeFromNow } from "@/lib/dates";
-import { flow, series as seriesColor } from "@/lib/palette";
+import { flow } from "@/lib/palette";
 import { PageHeader, PageShell } from "@/components/chrome/PageHeader";
 import { SyncButton } from "@/components/chrome/Toolbar";
 import { LoadError, Unconfigured } from "@/components/chrome/DataState";
@@ -70,6 +71,16 @@ export default async function InvestmentsPage() {
   const previous = summary.series[summary.series.length - 2];
   const monthMove = previous ? last.position - previous.position : null;
 
+  // "Pior mês" only exists when a month actually lost money, so the pair may be one
+  // card wide — and one card is a full-width card, not a half-empty row.
+  const extremes: { label: string; accent: string; point: InvestPoint }[] = [];
+  if (summary.bestMonth) {
+    extremes.push({ label: "Melhor mês", accent: flow.in, point: summary.bestMonth });
+  }
+  if (summary.worstMonth) {
+    extremes.push({ label: "Pior mês", accent: flow.out, point: summary.worstMonth });
+  }
+
   return (
     <PageShell>
       {header}
@@ -104,7 +115,7 @@ export default async function InvestmentsPage() {
             <StatTile
               label="Retorno sobre o aporte"
               value={summary.returnOnContrib != null ? pctSigned(summary.returnOnContrib, 1) : "—"}
-              footnote="Ganho dividido pelo total aportado, sem ponderar tempo"
+              footnote="Ganho sobre o aportado, sem ponderar tempo. Resgate maior que o aporte do ativo entra como ganho."
             />
           </div>
         </div>
@@ -149,84 +160,78 @@ export default async function InvestmentsPage() {
         </Card>
       </div>
 
-      {(summary.bestMonth || summary.worstMonth) && (
-        <div className="mb-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
-          {summary.bestMonth && (
-            <Card>
+      {extremes.length > 0 && (
+        <div
+          className={`mb-5 grid grid-cols-1 gap-5 ${extremes.length > 1 ? "sm:grid-cols-2" : ""}`}
+        >
+          {extremes.map((extreme) => (
+            <Card key={extreme.label}>
               <StatTile
-                accent={flow.in}
-                label="Melhor mês"
-                value={brlSigned(summary.bestMonth.yield)}
-                footnote={monthLabel(summary.bestMonth.key, "long")}
+                accent={extreme.accent}
+                label={extreme.label}
+                value={brlSigned(extreme.point.yield)}
+                footnote={monthLabel(extreme.point.key, "long")}
               />
             </Card>
-          )}
-          {summary.worstMonth && summary.worstMonth.key !== summary.bestMonth?.key && (
-            <Card>
-              <StatTile
-                accent={flow.out}
-                label="Pior mês"
-                value={brlSigned(summary.worstMonth.yield)}
-                footnote={monthLabel(summary.worstMonth.key, "long")}
-              />
-            </Card>
-          )}
+          ))}
         </div>
       )}
 
-      <Card>
-        <CardHeader
-          title="Por ativo"
-          hint="Ordenado pela posição. Retorno é o rendimento sobre o que foi aportado no ativo."
-        />
-        <div className="overflow-x-auto px-5 pb-5">
-          <table className="w-full min-w-[640px] border-collapse text-[12.5px]">
-            <thead>
-              <tr className="border-b border-hairline text-left text-[11.5px] text-ink-3">
-                <th className="py-2 pr-3 font-medium">Ativo</th>
-                <th className="py-2 pr-3 text-right font-medium">Aportado</th>
-                <th className="py-2 pr-3 text-right font-medium">Resgatado</th>
-                <th className="py-2 pr-3 text-right font-medium">Rendimento</th>
-                <th className="py-2 pr-3 text-right font-medium">Retorno</th>
-                <th className="py-2 text-right font-medium">Posição</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.assets.map((asset) => (
-                <tr key={asset.asset} className="border-b border-hairline last:border-0">
-                  <td className="py-2.5 pr-3">
-                    <span className="flex items-center gap-2">
-                      <span
-                        aria-hidden
-                        className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
-                        style={{ background: seriesColor(asset.slot) }}
-                      />
-                      <span className="text-ink">{asset.asset}</span>
-                    </span>
-                  </td>
-                  <td className="tnum py-2.5 pr-3 text-right text-ink-2">{brl(asset.contrib)}</td>
-                  <td className="tnum py-2.5 pr-3 text-right text-ink-2">
-                    {asset.withdraw > 0 ? brl(asset.withdraw) : "—"}
-                  </td>
-                  <td
-                    className={`tnum py-2.5 pr-3 text-right font-medium ${
-                      asset.yield >= 0 ? "text-good" : "text-bad"
-                    }`}
-                  >
-                    {asset.yield !== 0 ? brlSigned(asset.yield) : "—"}
-                  </td>
-                  <td className="tnum py-2.5 pr-3 text-right text-ink-2">
-                    {asset.returnOnContrib != null ? pct(asset.returnOnContrib, 1) : "—"}
-                  </td>
-                  <td className="tnum py-2.5 text-right font-medium text-ink">
-                    {brl(asset.position)}
-                  </td>
+      {summary.assets.length > 1 && (
+        <Card>
+          <CardHeader
+            title="Por ativo"
+            hint={
+              summary.groupedBy === "asset"
+                ? "Ordenado pelo tamanho do ativo. Retorno é o rendimento sobre o que foi aportado nele."
+                : "Sem coluna de ativo na planilha, cada linha vem da descrição, ordenada pelo tamanho."
+            }
+          />
+          <div className="overflow-x-auto px-5 pb-5">
+            <table className="w-full min-w-[640px] border-collapse text-[12.5px]">
+              <thead>
+                <tr className="border-b border-hairline text-left text-[11.5px] text-ink-3">
+                  <th className="py-2 pr-3 font-medium">
+                    {summary.groupedBy === "asset" ? "Ativo" : "Descrição"}
+                  </th>
+                  <th className="py-2 pr-3 text-right font-medium">Aportado</th>
+                  <th className="py-2 pr-3 text-right font-medium">Resgatado</th>
+                  <th className="py-2 pr-3 text-right font-medium">Rendimento</th>
+                  <th className="py-2 pr-3 text-right font-medium">Retorno</th>
+                  <th className="py-2 text-right font-medium">Posição</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody>
+                {summary.assets.map((asset) => (
+                  <tr key={asset.asset} className="border-b border-hairline last:border-0">
+                    {/* No swatch: nothing in this table is colour-coded, and a hue keyed
+                        to the row's rank would repaint every asset whenever the order
+                        changed. The name is the identity. */}
+                    <td className="py-2.5 pr-3 text-ink">{asset.asset}</td>
+                    <td className="tnum py-2.5 pr-3 text-right text-ink-2">{brl(asset.contrib)}</td>
+                    <td className="tnum py-2.5 pr-3 text-right text-ink-2">
+                      {asset.withdraw > 0 ? brl(asset.withdraw) : "—"}
+                    </td>
+                    <td
+                      className={`tnum py-2.5 pr-3 text-right font-medium ${
+                        asset.yield >= 0 ? "text-good" : "text-bad"
+                      }`}
+                    >
+                      {asset.yield !== 0 ? brlSigned(asset.yield) : "—"}
+                    </td>
+                    <td className="tnum py-2.5 pr-3 text-right text-ink-2">
+                      {asset.returnOnContrib != null ? pct(asset.returnOnContrib, 1) : "—"}
+                    </td>
+                    <td className="tnum py-2.5 text-right font-medium text-ink">
+                      {brl(asset.position)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </PageShell>
   );
 }

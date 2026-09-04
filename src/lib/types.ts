@@ -38,7 +38,11 @@ export interface Transaction {
   method: string;
   card: string | null;
   asset: string | null;
+  /** Which installment this row is — "3" in a 3-of-12, or "3/12" when the sheet
+   *  writes the pair in one cell. */
   installment: string | null;
+  /** How many installments in total, when the sheet keeps that in its own column. */
+  installmentTotal: string | null;
   note: string;
   /** Origin, so any number on screen can be traced back to a spreadsheet row. */
   sheet: string;
@@ -59,6 +63,7 @@ export type Field =
   | "card"
   | "asset"
   | "installment"
+  | "installmentTotal"
   | "note";
 
 export const FIELD_LABEL: Record<Field, string> = {
@@ -74,16 +79,21 @@ export const FIELD_LABEL: Record<Field, string> = {
   card: "Cartão",
   asset: "Ativo / classe",
   installment: "Parcela",
+  installmentTotal: "Total de parcelas",
   note: "Observação",
 };
 
 export const FIELD_HINT: Partial<Record<Field, string>> = {
   amount: "Uma coluna só, com sinal ou com a coluna de tipo ao lado.",
-  amountIn: "Use quando entradas e saídas ficam em colunas separadas.",
-  amountOut: "Use quando entradas e saídas ficam em colunas separadas.",
+  amountIn:
+    "Só para planilhas com duas colunas de valor: aqui vai a que recebe o que entra. Se existe uma coluna de valor única, deixe em branco.",
+  amountOut:
+    "A outra metade do par acima: a coluna que recebe o que sai. Uma planilha usa Valor ou este par, nunca os dois.",
   flow: "Aceita entrada/saída, receita/despesa, crédito/débito, +/-.",
   segment: "O agrupamento do dashboard: mercado, moradia, lazer…",
   asset: "Só para investimentos: CDB, Tesouro, ações, FII…",
+  installment: "Qual parcela é esta. Se a planilha já escreve 3/12 numa célula só, deixe o campo abaixo vazio.",
+  installmentTotal: "Quantas parcelas no total, quando isso mora numa coluna separada.",
 };
 
 /** Which header in the sheet feeds each canonical field. */

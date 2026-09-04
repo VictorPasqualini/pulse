@@ -59,7 +59,7 @@ function Plot({ weeks, width }: { weeks: WeekBucket[]; width: number }) {
       viewBox={`0 0 ${width} ${HEIGHT}`}
       role="img"
       aria-label="Gastos por semana do mês"
-      className="block overflow-visible"
+      className="block"
     >
       <Grid ticks={ticks} scale={y} width={width - PAD.right} left={PAD.left} />
       <YAxisLabels ticks={ticks} scale={y} left={PAD.left} />

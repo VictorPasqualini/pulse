@@ -1,11 +1,22 @@
 /**
  * Turning a share link into bytes.
  *
- * OneDrive share links point at a viewer page, not at the file. There is a
- * documented anonymous endpoint for "anyone with the link" shares —
- * `api.onedrive.com/v1.0/shares/u!<base64url>/root/content` — and SharePoint /
- * OneDrive for Business links take a `download=1` parameter instead. Everything
- * else is passed through untouched, so a plain https URL to an .xlsx still works.
+ * A OneDrive share link points at a viewer page, not at the file, and which
+ * endpoint serves the bytes depends on something the link does not tell you:
+ * whether that personal account has been migrated to SharePoint Online. Microsoft
+ * is moving every consumer account across, and for a migrated one the old
+ * anonymous endpoint — `api.onedrive.com/v1.0/shares/u!<base64url>/root/content` —
+ * answers 401 `unauthenticated` no matter how public the link is. Migrated files
+ * live at `my.microsoftpersonalcontent.com` and download through the ordinary
+ * SharePoint route, `_layouts/15/download.aspx?share=<id>`.
+ *
+ * So a OneDrive link resolves to a *list* of candidates and `fetchSource` tries
+ * them in order. Guessing costs one extra request in the worst case and removes a
+ * dead end the user has no way to diagnose.
+ *
+ * SharePoint / OneDrive for Business links take a `download=1` parameter instead.
+ * Everything else is passed through untouched, so a plain https URL to an .xlsx
+ * still works.
  *
  * When Pulse later grows a "Sign in with Microsoft" flow, only this file changes:
  * the rest of the app already talks to `fetchSource()`.
@@ -15,8 +26,8 @@ export type SourceKind = "onedrive-share" | "sharepoint" | "direct" | "local";
 
 export interface ResolvedSource {
   kind: SourceKind;
-  /** Where to actually GET the bytes. */
-  requestUrl: string;
+  /** Endpoints to GET, in order of preference. Usually one; OneDrive needs two. */
+  requestUrls: string[];
   /** Short, human label for the header ("OneDrive · Financas.xlsx"). */
   label: string;
 }
@@ -26,7 +37,7 @@ export function resolveSource(input: string): ResolvedSource {
   if (!raw) throw new SourceError("Nenhuma fonte de dados configurada.");
 
   if (!/^https?:\/\//i.test(raw)) {
-    return { kind: "local", requestUrl: raw, label: `Arquivo local · ${basename(raw)}` };
+    return { kind: "local", requestUrls: [raw], label: `Arquivo local · ${basename(raw)}` };
   }
 
   let url: URL;
@@ -42,21 +53,26 @@ export function resolveSource(input: string): ResolvedSource {
   if (host === "1drv.ms" || host.endsWith("onedrive.live.com")) {
     // A direct download URL from the viewer already works; leave it alone.
     if (url.pathname.toLowerCase().includes("/download")) {
-      return { kind: "direct", requestUrl: url.toString(), label: `OneDrive · ${basename(url.pathname)}` };
+      return { kind: "direct", requestUrls: [url.toString()], label: `OneDrive · ${basename(url.pathname)}` };
     }
-    const token = "u!" + base64Url(url.toString());
-    return {
-      kind: "onedrive-share",
-      requestUrl: `https://api.onedrive.com/v1.0/shares/${token}/root/content`,
-      label: "OneDrive · link compartilhado",
-    };
+
+    const candidates: string[] = [];
+    const share = shareIds(url);
+    if (share) {
+      candidates.push(
+        `https://my.microsoftpersonalcontent.com/personal/${share.driveId}/_layouts/15/download.aspx?share=${encodeURIComponent(share.shareId)}`,
+      );
+    }
+    candidates.push(`https://api.onedrive.com/v1.0/shares/u!${base64Url(url.toString())}/root/content`);
+
+    return { kind: "onedrive-share", requestUrls: candidates, label: "OneDrive · link compartilhado" };
   }
 
   // OneDrive for Business / SharePoint.
   if (host.endsWith("sharepoint.com")) {
     const out = new URL(url.toString());
     out.searchParams.set("download", "1");
-    return { kind: "sharepoint", requestUrl: out.toString(), label: `SharePoint · ${basename(url.pathname)}` };
+    return { kind: "sharepoint", requestUrls: [out.toString()], label: `SharePoint · ${basename(url.pathname)}` };
   }
 
   // Google Sheets published as xlsx, Dropbox, a raw file on a server: pass through,
@@ -64,10 +80,32 @@ export function resolveSource(input: string): ResolvedSource {
   if (host.endsWith("dropbox.com")) {
     const out = new URL(url.toString());
     out.searchParams.set("dl", "1");
-    return { kind: "direct", requestUrl: out.toString(), label: `Dropbox · ${basename(url.pathname)}` };
+    return { kind: "direct", requestUrls: [out.toString()], label: `Dropbox · ${basename(url.pathname)}` };
   }
 
-  return { kind: "direct", requestUrl: url.toString(), label: `${host} · ${basename(url.pathname)}` };
+  return { kind: "direct", requestUrls: [url.toString()], label: `${host} · ${basename(url.pathname)}` };
+}
+
+/**
+ * The drive and share ids buried in a modern OneDrive link.
+ *
+ *   https://1drv.ms/x/c/f9d77a32a3bc6988/IQB20Fw_CZUy…
+ *   https://onedrive.live.com/:x:/g/personal/F9D77A32A3BC6988/IQB20Fw_CZUy…
+ *
+ * Both put a 16-digit hex drive id immediately before the share id, which is the
+ * only stable thing about these paths — the segments around it have changed more
+ * than once. Older links (`/x/s!AhY…`) carry no drive id at all and return null,
+ * which is fine: those accounts are the ones the legacy endpoint still serves.
+ */
+function shareIds(url: URL): { driveId: string; shareId: string } | null {
+  const segments = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (/^[0-9a-f]{16}$/i.test(segments[i]) && segments[i + 1]) {
+      return { driveId: segments[i].toLowerCase(), shareId: segments[i + 1] };
+    }
+  }
+  return null;
 }
 
 export class SourceError extends Error {
@@ -92,40 +130,57 @@ export async function fetchSource(input: string): Promise<FetchedFile> {
   const source = resolveSource(input);
 
   if (source.kind === "local") {
+    const path = source.requestUrls[0];
     const { readFile } = await import("node:fs/promises");
     try {
-      const buffer = await readFile(source.requestUrl);
+      const buffer = await readFile(path);
       const bytes = new Uint8Array(buffer);
-      return { bytes, format: sniffFormat(bytes, source.requestUrl), label: source.label };
+      return { bytes, format: sniffFormat(bytes, path), label: source.label };
     } catch {
       throw new SourceError(
-        `Não consegui abrir o arquivo "${source.requestUrl}".`,
+        `Não consegui abrir o arquivo "${path}".`,
         "Confira o caminho. Em Windows use barras normais, ex.: C:/Users/você/OneDrive/financas.xlsx",
       );
     }
   }
 
-  assertPublicHost(source.requestUrl);
+  // Try each candidate; the first that answers wins, and the last failure is the
+  // one reported, since candidates are ordered most-likely first.
+  let failure: SourceError | null = null;
+  let response: Response | null = null;
 
-  let response: Response;
-  try {
-    response = await fetch(source.requestUrl, {
-      redirect: "follow",
-      headers: { Accept: "*/*", "User-Agent": "Pulse/0.1 (+financas)" },
-      cache: "no-store",
-    });
-  } catch {
-    throw new SourceError("Não consegui alcançar o link.", "Verifique a conexão e se o link continua válido.");
-  }
+  for (const candidate of source.requestUrls) {
+    assertPublicHost(candidate);
 
-  if (!response.ok) {
-    throw new SourceError(
-      `O link respondeu ${response.status}.`,
-      response.status === 401 || response.status === 403
-        ? 'O arquivo precisa estar compartilhado como "qualquer pessoa com o link pode ver".'
+    let attempt: Response;
+    try {
+      attempt = await fetch(candidate, {
+        redirect: "follow",
+        headers: { Accept: "*/*", "User-Agent": "Pulse/0.1 (+financas)" },
+        cache: "no-store",
+      });
+    } catch {
+      failure = new SourceError(
+        "Não consegui alcançar o link.",
+        "Verifique a conexão e se o link continua válido.",
+      );
+      continue;
+    }
+
+    if (attempt.ok) {
+      response = attempt;
+      break;
+    }
+
+    failure = new SourceError(
+      `O link respondeu ${attempt.status}.`,
+      attempt.status === 401 || attempt.status === 403
+        ? 'O arquivo precisa estar compartilhado como "qualquer pessoa com o link pode ver". No OneDrive: Compartilhar › Qualquer pessoa com o link › Pode visualizar.'
         : "Abra o link no navegador para confirmar que ele ainda funciona.",
     );
   }
+
+  if (!response) throw failure ?? new SourceError("Não consegui alcançar o link.");
 
   const declaredLength = Number(response.headers.get("content-length") ?? "0");
   if (declaredLength > MAX_BYTES) {
@@ -147,7 +202,7 @@ export async function fetchSource(input: string): Promise<FetchedFile> {
   const filename = filenameFromDisposition(response.headers.get("content-disposition"));
   const label = filename ? `${source.label.split(" · ")[0]} · ${filename}` : source.label;
 
-  return { bytes, format: sniffFormat(bytes, filename ?? source.requestUrl, contentType), label };
+  return { bytes, format: sniffFormat(bytes, filename ?? response.url, contentType), label };
 }
 
 function sniffFormat(bytes: Uint8Array, name: string, contentType = ""): "xlsx" | "csv" {

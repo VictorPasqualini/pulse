@@ -108,7 +108,7 @@ function Plot({
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label={valueLabel}
-      className="block overflow-visible"
+      className="block"
     >
       <Grid ticks={ticks} scale={y} width={width - PAD.right} left={PAD.left} showZero />
       <YAxisLabels ticks={ticks} scale={y} left={PAD.left} />

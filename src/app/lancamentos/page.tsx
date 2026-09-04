@@ -4,7 +4,7 @@ import { loadDataset } from "@/lib/source";
 import { availableMonths } from "@/lib/metrics";
 import { brl, brlSigned } from "@/lib/money";
 import { fullDateLabel, monthKey, relativeFromNow } from "@/lib/dates";
-import { fold } from "@/lib/text";
+import { fold, installmentLabel } from "@/lib/text";
 import { BUCKET_LABEL, type Bucket, type Transaction } from "@/lib/types";
 import { PageHeader, PageShell } from "@/components/chrome/PageHeader";
 import { SyncButton } from "@/components/chrome/Toolbar";
@@ -133,8 +133,10 @@ export default async function LedgerPage({
                     </td>
                     <td className="py-2.5 pr-3 text-ink">
                       {tx.description || "—"}
-                      {tx.installment && (
-                        <span className="ml-1.5 text-[11.5px] text-ink-3">{tx.installment}</span>
+                      {installmentLabel(tx.installment, tx.installmentTotal) && (
+                        <span className="ml-1.5 text-[11.5px] text-ink-3">
+                          {installmentLabel(tx.installment, tx.installmentTotal)}
+                        </span>
                       )}
                     </td>
                     <td className="py-2.5 pr-3 text-ink-2">{tx.segment}</td>

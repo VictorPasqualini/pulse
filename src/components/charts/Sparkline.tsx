@@ -1,4 +1,4 @@
-import { LINE_WIDTH } from "./chartkit";
+import { LINE_WIDTH } from "./specs";
 
 /**
  * The shape of a trend beside a number. No axes and no hover: the tile already

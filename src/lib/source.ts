@@ -1,5 +1,6 @@
 import type { Cell } from "@/lib/xlsx/reader";
 import type { Dataset, PulseConfig, SheetMeta } from "@/lib/types";
+import type { Workbook } from "@/lib/xlsx/reader";
 import { readWorkbook } from "@/lib/xlsx/reader";
 import { parseCSV } from "@/lib/csv";
 import { autoMap, mergeColumns } from "@/lib/mapping";
@@ -140,7 +141,8 @@ function grid(
   }
 
   const workbook = readWorkbook(file.bytes);
-  const wanted = sheetName && workbook.sheetNames.includes(sheetName) ? sheetName : workbook.sheetNames[0];
+  const wanted =
+    sheetName && workbook.sheetNames.includes(sheetName) ? sheetName : pickLedgerSheet(workbook);
   const rows = workbook.sheet(wanted);
 
   // Header lists for the other sheets are read lazily on the config screen only;
@@ -152,6 +154,52 @@ function grid(
   });
 
   return { rows, sheets, usedSheet: wanted };
+}
+
+/**
+ * Which tab holds the ledger.
+ *
+ * A real workbook is not one table. A spreadsheet someone actually keeps grows a
+ * planning tab, a balance tab, a weekly summary, a payroll history — and the
+ * transactions can sit anywhere among them. Reading sheet 1 and reporting "não
+ * encontrei a coluna de data" is a dead end the user has no way to debug, so
+ * instead every sheet is auto-mapped and scored on whether it looks like a ledger
+ * at all: a date, a value, a description, and rows underneath them. Ties go to the
+ * earliest tab, and the picker on /configuracao overrides the guess.
+ */
+function pickLedgerSheet(workbook: Workbook): string {
+  let best = workbook.sheetNames[0] ?? "";
+  let bestScore = -Infinity;
+
+  for (const name of workbook.sheetNames) {
+    let rows: Cell[][];
+    try {
+      rows = workbook.sheet(name);
+    } catch {
+      continue;
+    }
+
+    const auto = autoMap(rows, null);
+    const body = rows.length - auto.headerRow - 1;
+    if (body < 1) continue;
+
+    const hasAmount = Boolean(auto.columns.amount || auto.columns.amountIn || auto.columns.amountOut);
+    const score =
+      (auto.columns.date ? 4 : 0) +
+      (hasAmount ? 4 : 0) +
+      (auto.columns.description ? 2 : 0) +
+      (auto.columns.segment ? 1 : 0) +
+      // A tie-break, not a factor: a summary tab can map cleanly and still be the
+      // wrong answer, and the ledger is nearly always the longest sheet.
+      Math.min(2, Math.log10(body));
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = name;
+    }
+  }
+
+  return best;
 }
 
 /** Drop the dataset cache so the next read hits the network. */

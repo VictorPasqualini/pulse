@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { loadDataset } from "@/lib/source";
-import { availableMonths, cardBuckets, inMonth, segmentSlices } from "@/lib/metrics";
+import { availableMonths, cardBuckets, defaultMonth, inMonth, segmentSlices } from "@/lib/metrics";
 import type { Slice } from "@/lib/metrics";
 import type { Transaction } from "@/lib/types";
 import { brl, pct } from "@/lib/money";
+import { installmentLabel } from "@/lib/text";
 import { dayLabel, monthKey, monthLabel, relativeFromNow } from "@/lib/dates";
 import { flow } from "@/lib/palette";
 import { PageHeader, PageShell } from "@/components/chrome/PageHeader";
@@ -46,7 +47,7 @@ export default async function CardsPage({
 
   const { transactions, fetchedAt } = result.dataset;
   const months = availableMonths(transactions);
-  const current = mes && months.includes(mes) ? mes : (months[0] ?? "");
+  const current = mes && months.includes(mes) ? mes : defaultMonth(months);
 
   const txMonth = current ? inMonth(transactions, current) : [];
   const cards = cardBuckets(txMonth);
@@ -190,8 +191,10 @@ export default async function CardsPage({
                   </td>
                   <td className="py-2.5 pr-3 text-ink">
                     {tx.description || "—"}
-                    {tx.installment && (
-                      <span className="ml-1.5 text-[11.5px] text-ink-3">{tx.installment}</span>
+                    {installmentLabel(tx.installment, tx.installmentTotal) && (
+                      <span className="ml-1.5 text-[11.5px] text-ink-3">
+                        {installmentLabel(tx.installment, tx.installmentTotal)}
+                      </span>
                     )}
                   </td>
                   <td className="py-2.5 pr-3 text-ink-2">{tx.card}</td>

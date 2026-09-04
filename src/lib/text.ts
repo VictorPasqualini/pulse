@@ -49,12 +49,41 @@ export function matchesAny(haystack: string, terms: readonly string[]): boolean 
   });
 }
 
+/**
+ * "3/12" out of the two columns a sheet usually keeps apart — `parcela` and
+ * `total_parcelas`.
+ *
+ * A lone "3" is unreadable: three of what? And "1/1" is worse than nothing, since
+ * it labels an ordinary purchase as an installment plan — which is why a total of
+ * one returns null instead. Sheets that already write the pair in one cell are
+ * passed through untouched.
+ */
+export function installmentLabel(current: string | null, total: string | null): string | null {
+  const one = (value: string | null) => (value ?? "").trim();
+  const now = one(current);
+  const all = one(total);
+
+  if (now.includes("/")) return now;
+  if (!all || all === "1") return now && now !== "1" ? now : null;
+  if (!now) return `1/${all}`;
+  return `${now}/${all}`;
+}
+
+/**
+ * Acronyms a spreadsheet writes in lowercase because it was typed in a hurry.
+ * "Pix" and "Ted" read as words; PIX and TED read as what they are.
+ */
+const ACRONYMS = new Set([
+  "pix", "ted", "doc", "cdb", "cdi", "lci", "lca", "fii", "etf", "ipva", "iptu", "inss", "fgts",
+]);
+
 /** Title-case a segment name for display without mangling acronyms the user
  *  typed in caps (CDB, FII, IPVA). */
 export function titleize(value: string): string {
   return value
     .split(/\s+/)
     .map((word) => {
+      if (ACRONYMS.has(deaccent(word).toLowerCase())) return word.toUpperCase();
       if (word.length <= 1) return word.toUpperCase();
       if (word === word.toUpperCase() && word.length <= 4) return word;
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();

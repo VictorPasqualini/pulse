@@ -5,7 +5,6 @@ import { brl } from "@/lib/money";
 import {
   Crosshair,
   Grid,
-  LINE_WIDTH,
   Marker,
   TooltipHost,
   XAxisLabels,
@@ -15,6 +14,7 @@ import {
   useTooltip,
   type TooltipRow,
 } from "./chartkit";
+import { LINE_WIDTH } from "./specs";
 
 /**
  * A single measure over time: patrimônio acumulado, saldo acumulado. Line plus a
@@ -137,7 +137,7 @@ function Plot({
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label={title}
-      className="block overflow-visible"
+      className="block"
     >
       <Grid ticks={ticks} scale={y} width={width - PAD.right} left={PAD.left} />
       <YAxisLabels ticks={ticks} scale={y} left={PAD.left} />
@@ -162,9 +162,17 @@ function Plot({
       {active === null && points.length > 0 && (
         <>
           <Marker x={x(last)} y={y(points[last].value)} color={color} />
+          {/* An accumulating series peaks at its last point, which puts that point on
+              the top gridline and the label above it outside the box. When there is
+              no room over the marker the label goes under it — clamping it to the
+              edge instead would just print it on top of the dot. */}
           <text
             x={x(last)}
-            y={y(points[last].value) - 12}
+            y={
+              y(points[last].value) - PAD.top > 22
+                ? y(points[last].value) - 12
+                : y(points[last].value) + 20
+            }
             textAnchor="end"
             className="tnum"
             fontSize={11}

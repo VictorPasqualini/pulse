@@ -13,10 +13,15 @@ import { matchesAny } from "@/lib/text";
  */
 
 export const DEFAULT_RULES: Rules = {
+  // A term earns its place only if it means "investment" and nothing else. "Bolsa"
+  // fails that test — in Portuguese it is a handbag far more often than it is the
+  // stock exchange, and a gift-segment purse was being counted as an aporte — so the
+  // list carries the unambiguous "bolsa de valores" instead. Same reasoning keeps
+  // "renda" out and "renda fixa" in.
   investmentTerms: [
     "investimento", "investimentos", "invest", "aporte", "aportes", "aplicacao", "aplicacoes",
     "tesouro", "selic", "ipca", "cdb", "lci", "lca", "cri", "cra", "debenture",
-    "fundo", "fundos", "etf", "fii", "acoes", "acao", "bolsa", "b3", "renda fixa",
+    "fundo", "fundos", "etf", "fii", "acoes", "acao", "bolsa de valores", "b3", "renda fixa",
     "renda variavel", "poupanca", "previdencia", "pgbl", "vgbl",
     "cripto", "bitcoin", "btc", "ethereum", "corretora", "carteira de investimento",
     "resgate", "rendimento", "rendimentos", "dividendo", "dividendos", "jcp", "proventos",
@@ -24,7 +29,7 @@ export const DEFAULT_RULES: Rules = {
   yieldTerms: [
     "rendimento", "rendimentos", "juros", "dividendo", "dividendos", "jcp", "proventos",
     "lucro", "prejuizo", "perda", "ganho de capital", "valorizacao", "desvalorizacao",
-    "marcacao a mercado", "yield", "cupom", "amortizacao", "variacao",
+    "marcacao a mercado", "yield", "cupom", "amortizacao", "variacao", "cashback",
   ],
   withdrawTerms: ["resgate", "resgates", "retirada", "saque", "venda", "liquidacao", "vencimento"],
   creditTerms: ["credito", "cartao", "fatura", "card", "parcelado", "parcelamento"],
@@ -53,9 +58,26 @@ export function classify(input: ClassifyInput, rules: Rules): Bucket {
 
   if (!isInvestment) return input.flow === "in" ? "income" : "expense";
 
-  if (matchesAny(haystack, rules.yieldTerms)) return "invest_yield";
+  // Money leaving the account for an asset is always a contribution.
   if (input.flow === "out") return "invest_contrib";
-  return matchesAny(haystack, rules.withdrawTerms) ? "invest_withdraw" : "invest_yield";
+
+  /**
+   * Money coming back is a withdrawal unless it says it is a gain.
+   *
+   * The two are told apart by vocabulary, and the vocabulary is lopsided: a gain
+   * announces itself ("proventos", "dividendo", "rendimento", "cashback"), while a
+   * redemption is usually written as nothing more than the asset's own name — the
+   * same line that recorded the contribution, pointing the other way. Defaulting
+   * such a row to a gain is the expensive mistake: a CDB that took R$ 143.000 and
+   * returned R$ 152.862 would be booked as R$ 152.862 of profit instead of R$ 9.862,
+   * and every return figure on the investments screen would be fiction. Defaulting
+   * to a withdrawal only understates the gain, which the numbers themselves reveal.
+   *
+   * A withdrawal term wins over a yield term, so "resgate do rendimento" is read as
+   * the resgate it is.
+   */
+  if (matchesAny(haystack, rules.withdrawTerms)) return "invest_withdraw";
+  return matchesAny(haystack, rules.yieldTerms) ? "invest_yield" : "invest_withdraw";
 }
 
 /** Signed contribution of a row to a bucket's running total. */

@@ -2,10 +2,11 @@ import Link from "next/link";
 import { loadDataset } from "@/lib/source";
 import {
   availableMonths,
+  defaultMonth,
   biggestExpenses,
-  cardBuckets,
   inMonth,
   investmentSummary,
+  methodBuckets,
   monthlySeries,
   segmentSlices,
   trailingAverage,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/metrics";
 import { brl, brlCompact, brlSigned, change, pct, pctSigned } from "@/lib/money";
 import { dayLabel, monthLabel, relativeFromNow } from "@/lib/dates";
+import { titleize } from "@/lib/text";
 import { flow } from "@/lib/palette";
 import { PageHeader, PageShell } from "@/components/chrome/PageHeader";
 import { MonthPicker, SyncButton } from "@/components/chrome/Toolbar";
@@ -79,7 +81,7 @@ export default async function DashboardPage({
     );
   }
 
-  const current = mes && months.includes(mes) ? mes : months[0];
+  const current = mes && months.includes(mes) ? mes : defaultMonth(months);
   const full = monthlySeries(transactions);
   const currentIndex = full.findIndex((month) => month.key === current);
   const shown = full.slice(Math.max(0, currentIndex - (WINDOW - 1)), currentIndex + 1);
@@ -92,14 +94,13 @@ export default async function DashboardPage({
   const expenseSlices = segmentSlices(txMonth, (tx) => tx.bucket === "expense");
   const incomeSlices = segmentSlices(txMonth, (tx) => tx.bucket === "income");
   const weeks = weeklySpend(transactions, current);
-  const cards = cardBuckets(txMonth);
+  const methods = methodBuckets(txMonth);
   const biggest = biggestExpenses(txMonth, 5);
   const investMonth = investmentSummary(txMonth);
   const investAll = investmentSummary(transactions);
 
   const incomeDelta = avgIncome != null ? change(totals.income, avgIncome) : null;
   const expenseDelta = avgExpense != null ? change(totals.expense, avgExpense) : null;
-  const cardTotal = cards.reduce((sum, card) => sum + card.amount, 0);
 
   return (
     <PageShell>
@@ -236,31 +237,32 @@ export default async function DashboardPage({
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <Card>
           <CardHeader
-            title="Cartão de crédito"
-            hint={cardTotal > 0 ? `${brl(cardTotal)} no mês` : "Nenhuma despesa em cartão"}
+            title="Saídas por forma de pagamento"
+            hint={`${monthLabel(current, "long")} · o que a planilha marca em tipo_transacao`}
             aside={
               <Link href="/cartoes" className="text-[12px] font-medium text-brand hover:underline">
-                Ver tudo
+                Ver cartão
               </Link>
             }
           />
-          {cards.length === 0 ? (
-            <Empty title="Nenhuma despesa marcada como cartão.">
-              <p>
-                O Pulse reconhece pela coluna de cartão ou por palavras como crédito e fatura no
-                meio de pagamento.
-              </p>
-            </Empty>
+          {methods.length === 0 ? (
+            <Empty title="Nenhuma saída neste mês." />
           ) : (
             <ul className="flex flex-col px-5 pb-4">
-              {cards.slice(0, 5).map((card) => (
+              {methods.slice(0, 6).map((method) => (
                 <li
-                  key={card.card}
+                  key={method.method}
                   className="flex items-baseline justify-between gap-3 border-b border-hairline py-2.5 last:border-0"
                 >
-                  <span className="min-w-0 truncate text-[12.5px] text-ink">{card.card}</span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[12.5px] text-ink">{titleize(method.method)}</p>
+                    <p className="text-[11.5px] text-ink-3">
+                      {pct(method.share, 0)} das saídas · {method.count}{" "}
+                      {method.count === 1 ? "lançamento" : "lançamentos"}
+                    </p>
+                  </div>
                   <span className="tnum shrink-0 text-[12.5px] font-medium text-ink">
-                    {brl(card.amount)}
+                    {brl(method.amount)}
                   </span>
                 </li>
               ))}
