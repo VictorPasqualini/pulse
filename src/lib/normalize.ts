@@ -72,11 +72,10 @@ export function normalizeRows(
     const installmentTotal = str(at(row, columns.installmentTotal)) || null;
 
     const cardCell = str(at(row, columns.card));
-    const card = cardCell
-      ? cardCell
-      : looksLikeCredit(null, method, description, rules)
-        ? method || "Crédito"
-        : null;
+    const credit = looksLikeCredit(cardCell || null, method, rules);
+    // The card column still names the card when the sheet keeps one, even on a row
+    // paid by pix — the name is a label, `credit` is the filter.
+    const card = cardCell || (credit ? method || "Crédito" : null);
 
     const bucket = classify(
       { flow: resolved.flow, segment, description, asset, method, account },
@@ -94,6 +93,7 @@ export function normalizeRows(
       account,
       method,
       card,
+      credit,
       asset,
       installment,
       installmentTotal,

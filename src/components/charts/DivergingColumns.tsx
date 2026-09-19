@@ -1,7 +1,8 @@
 "use client";
 
 import { flow } from "@/lib/palette";
-import { brl, brlSigned } from "@/lib/money";
+import { brl, brlSigned, compact, pct, pctSigned } from "@/lib/money";
+import type { TooltipRow } from "./chartkit";
 import {
   Grid,
   HitArea,
@@ -27,7 +28,35 @@ export interface DivergingPoint {
   label: string;
   value: number;
   note?: string;
+  /** Replaces the single-value tooltip when the bar is a sum worth breaking apart —
+   *  a month's growth is aporte, resgate and rendimento, and the parts are the point. */
+  rows?: TooltipRow[];
 }
+
+/** A horizontal rule the bars are read against — an average, a target. */
+export interface Reference {
+  value: number;
+  label: string;
+}
+
+/**
+ * What the numbers are, named rather than passed as a formatter: this is a client
+ * component, and a server page cannot hand a function across the boundary.
+ */
+export type ValueFormat = "money" | "percent";
+
+const AXIS: Record<ValueFormat, (value: number) => string> = {
+  money: compact,
+  percent: (value) => pct(value, 1),
+};
+const PLAIN: Record<ValueFormat, (value: number) => string> = {
+  money: brl,
+  percent: (value) => pct(value, 2),
+};
+const SIGNED: Record<ValueFormat, (value: number) => string> = {
+  money: brlSigned,
+  percent: (value) => pctSigned(value, 2),
+};
 
 const PAD = { top: 16, right: 6, bottom: 24, left: 44 };
 
@@ -38,6 +67,8 @@ export function DivergingColumns({
   downLabel,
   height = 180,
   valueLabel = "Valor",
+  format,
+  reference,
 }: {
   points: DivergingPoint[];
   emphasis?: string;
@@ -45,6 +76,10 @@ export function DivergingColumns({
   downLabel: string;
   height?: number;
   valueLabel?: string;
+  /** How a value reads on the axis and in the hover. Money by default; a chart of
+   *  percentages says so, or the axis would claim to be reais. */
+  format?: ValueFormat;
+  reference?: Reference;
 }) {
   const [ref, width] = useMeasure<HTMLDivElement>();
 
@@ -58,6 +93,8 @@ export function DivergingColumns({
             width={width}
             height={height}
             valueLabel={valueLabel}
+            format={format}
+            reference={reference}
           />
         ) : (
           <div style={{ height }} />
@@ -67,6 +104,15 @@ export function DivergingColumns({
           items={[
             { label: upLabel, color: flow.in },
             { label: downLabel, color: flow.out },
+            ...(reference
+              ? [
+                  {
+                    label: reference.label,
+                    color: "var(--ink-3)",
+                    value: PLAIN[format ?? "money"](reference.value),
+                  },
+                ]
+              : []),
           ]}
         />
       </div>
@@ -80,18 +126,26 @@ function Plot({
   width,
   height,
   valueLabel,
+  format,
+  reference,
 }: {
   points: DivergingPoint[];
   emphasis?: string;
   width: number;
   height: number;
   valueLabel: string;
+  format?: ValueFormat;
+  reference?: Reference;
 }) {
   const tooltip = useTooltip();
   const plotWidth = Math.max(80, width - PAD.left - PAD.right);
   const plotHeight = height - PAD.top - PAD.bottom;
 
-  const magnitude = Math.max(1, ...points.map((p) => Math.abs(p.value)));
+  const values = points.map((p) => Math.abs(p.value));
+  if (reference) values.push(Math.abs(reference.value));
+  // A percentage chart lives between 0 and 0,02; a floor of 1 would flatten every
+  // bar against the axis, so the floor is only there to keep an all-zero chart sane.
+  const magnitude = Math.max(...values, Number.EPSILON);
   const ticks = divergingTicks(magnitude);
   const top = Math.max(...ticks) || 1;
   const y = (value: number) => PAD.top + plotHeight / 2 - (value / top) * (plotHeight / 2);
@@ -111,7 +165,20 @@ function Plot({
       className="block"
     >
       <Grid ticks={ticks} scale={y} width={width - PAD.right} left={PAD.left} showZero />
-      <YAxisLabels ticks={ticks} scale={y} left={PAD.left} />
+      <YAxisLabels ticks={ticks} scale={y} left={PAD.left} format={AXIS[format ?? "money"]} />
+
+      {reference && (
+        <line
+          x1={PAD.left}
+          x2={width - PAD.right}
+          y1={y(reference.value)}
+          y2={y(reference.value)}
+          stroke="var(--ink-3)"
+          strokeWidth={1}
+          strokeDasharray="4 3"
+          aria-hidden
+        />
+      )}
 
       {points.map((point, index) => {
         const center = PAD.left + band * index + band / 2;
@@ -140,13 +207,19 @@ function Plot({
               y={PAD.top}
               width={band}
               height={plotHeight}
-              label={`${point.label}: ${brlSigned(point.value)}`}
+              label={`${point.label}: ${SIGNED[format ?? "money"](point.value)}`}
               onEnter={() =>
                 tooltip.show({
                   x: center,
                   y: up ? y(point.value) : zero,
                   title: point.label,
-                  rows: [{ label: valueLabel, value: brl(point.value), color: up ? flow.in : flow.out }],
+                  rows: point.rows ?? [
+                    {
+                      label: valueLabel,
+                      value: PLAIN[format ?? "money"](point.value),
+                      color: up ? flow.in : flow.out,
+                    },
+                  ],
                   note: point.note,
                 })
               }

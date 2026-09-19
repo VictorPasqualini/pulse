@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { loadDataset } from "@/lib/source";
-import type { InvestPoint } from "@/lib/metrics";
 import { investmentSummary } from "@/lib/metrics";
 import { brl, brlSigned, pct, pctSigned } from "@/lib/money";
 import { monthLabel, relativeFromNow } from "@/lib/dates";
@@ -68,18 +67,14 @@ export default async function InvestmentsPage() {
   }
 
   const last = summary.series[summary.series.length - 1];
-  const previous = summary.series[summary.series.length - 2];
-  const monthMove = previous ? last.position - previous.position : null;
+  const monthMove = summary.series.length > 1 ? last.growth : null;
 
-  // "Pior mês" only exists when a month actually lost money, so the pair may be one
-  // card wide — and one card is a full-width card, not a half-empty row.
-  const extremes: { label: string; accent: string; point: InvestPoint }[] = [];
-  if (summary.bestMonth) {
-    extremes.push({ label: "Melhor mês", accent: flow.in, point: summary.bestMonth });
-  }
-  if (summary.worstMonth) {
-    extremes.push({ label: "Pior mês", accent: flow.out, point: summary.worstMonth });
-  }
+  // Part of the yield is inferred rather than written down, and a screen that shows
+  // an inferred number without saying so is lying quietly.
+  const hasEstimate = summary.series.some((point) => Math.abs(point.estimated) > 0.005);
+  const estimateNote = hasEstimate
+    ? "Inclui rendimento estimado: o ganho de um resgate é rateado pelos meses aplicados."
+    : undefined;
 
   return (
     <PageShell>
@@ -145,37 +140,139 @@ export default async function InvestmentsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Rendimento por mês" hint="Ganho e perda, já com sinal" />
+          <CardHeader
+            title="Crescimento no mês"
+            hint="Quanto a posição subiu ou caiu, e de onde veio"
+          />
+          <DivergingColumns
+            points={summary.series.map((point) => ({
+              key: point.key,
+              label: monthLabel(point.key),
+              value: point.growth,
+              rows: [
+                {
+                  label: "Crescimento",
+                  value: brlSigned(point.growth),
+                  color: point.growth >= 0 ? flow.in : flow.out,
+                },
+                { label: "Aportes", value: brl(point.contrib), muted: true },
+                ...(point.withdraw > 0
+                  ? [{ label: "Resgates", value: `−${brl(point.withdraw)}`, muted: true }]
+                  : []),
+                { label: "Rendimento", value: brlSigned(point.yield), muted: true },
+                ...(point.growthRate != null
+                  ? [{ label: "Variação", value: pctSigned(point.growthRate, 1), muted: true }]
+                  : []),
+                { label: "Posição no fim", value: brl(point.position), muted: true },
+              ],
+              // A month can fall without losing a cent: a resgate moves money out of
+              // the portfolio, and the bar has to say which of the two happened.
+              note:
+                point.growth < 0 && point.withdraw > 0
+                  ? "Queda por resgate, não por perda."
+                  : undefined,
+            }))}
+            upLabel="Cresceu"
+            downLabel="Caiu"
+            valueLabel="Crescimento"
+            height={220}
+          />
+        </Card>
+      </div>
+
+      <div className="mb-5 grid grid-cols-1 gap-5 xl:grid-cols-[1.35fr_1fr]">
+        <Card>
+          <CardHeader
+            title="Rendimento por mês"
+            hint={
+              hasEstimate
+                ? "Ganho e perda, com o ganho do resgate rateado pelos meses aplicados"
+                : "Ganho e perda, já com sinal"
+            }
+          />
           <DivergingColumns
             points={summary.series.map((point) => ({
               key: point.key,
               label: monthLabel(point.key),
               value: point.yield,
+              rows: [
+                {
+                  label: "Rendimento",
+                  value: brlSigned(point.yield),
+                  color: point.yield >= 0 ? flow.in : flow.out,
+                },
+                ...(Math.abs(point.estimated) > 0.005
+                  ? [{ label: "Estimado no rateio", value: brlSigned(point.estimated), muted: true }]
+                  : []),
+              ],
+              note:
+                Math.abs(point.estimated) > 0.005
+                  ? "Parte vem de resgate sem rendimento declarado."
+                  : undefined,
             }))}
             upLabel="Ganho"
             downLabel="Perda"
             valueLabel="Rendimento"
             height={220}
           />
+          {estimateNote && (
+            <p className="px-5 pb-5 text-[11.5px] leading-snug text-ink-3">{estimateNote}</p>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Rentabilidade ao mês"
+            hint="Rendimento sobre o capital médio aplicado no mês"
+          />
+          <DivergingColumns
+            points={summary.series.map((point) => ({
+              key: point.key,
+              label: monthLabel(point.key),
+              // A month with nothing invested has no rate; it draws flat rather than
+              // disappearing, so the timeline keeps its shape.
+              value: point.rate ?? 0,
+              rows:
+                point.rate != null
+                  ? [
+                      {
+                        label: "Rentabilidade",
+                        value: pctSigned(point.rate, 2),
+                        color: point.rate >= 0 ? flow.in : flow.out,
+                      },
+                      { label: "Rendimento", value: brlSigned(point.yield), muted: true },
+                      { label: "Capital médio", value: brl(point.capital), muted: true },
+                    ]
+                  : [{ label: "Rentabilidade", value: "—" }],
+              note:
+                point.rate == null
+                  ? "Nada aplicado neste mês."
+                  : Math.abs(point.estimated) > 0.005
+                    ? "Parte vem de resgate sem rendimento declarado."
+                    : undefined,
+            }))}
+            upLabel="Ganho"
+            downLabel="Perda"
+            valueLabel="Rentabilidade"
+            height={220}
+            format="percent"
+            reference={
+              summary.avgMonthlyRate != null
+                ? { value: summary.avgMonthlyRate, label: "Média" }
+                : undefined
+            }
+          />
+          <p className="px-5 pb-5 text-[11.5px] leading-snug text-ink-3">
+            {summary.avgMonthlyYield != null
+              ? `Média de ${summary.monthsCounted} ${
+                  summary.monthsCounted === 1 ? "mês" : "meses"
+                }: ${brlSigned(summary.avgMonthlyYield)} por mês.`
+              : ""}{" "}
+            O capital médio pondera pelos dias, então um aporte grande no fim do mês não
+            derruba a taxa.
+          </p>
         </Card>
       </div>
-
-      {extremes.length > 0 && (
-        <div
-          className={`mb-5 grid grid-cols-1 gap-5 ${extremes.length > 1 ? "sm:grid-cols-2" : ""}`}
-        >
-          {extremes.map((extreme) => (
-            <Card key={extreme.label}>
-              <StatTile
-                accent={extreme.accent}
-                label={extreme.label}
-                value={brlSigned(extreme.point.yield)}
-                footnote={monthLabel(extreme.point.key, "long")}
-              />
-            </Card>
-          ))}
-        </div>
-      )}
 
       {summary.assets.length > 1 && (
         <Card>

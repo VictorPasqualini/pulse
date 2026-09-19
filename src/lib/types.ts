@@ -37,6 +37,14 @@ export interface Transaction {
   account: string;
   method: string;
   card: string | null;
+  /**
+   * Paid on credit — the one thing the Cartões screen counts.
+   *
+   * Separate from `card` because the two answer different questions: a sheet can
+   * name a card on a row that was paid by pix, and it can record a credit purchase
+   * with no card name at all.
+   */
+  credit: boolean;
   asset: string | null;
   /** Which installment this row is — "3" in a 3-of-12, or "3/12" when the sheet
    *  writes the pair in one cell. */
