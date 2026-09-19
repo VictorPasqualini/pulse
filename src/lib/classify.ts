@@ -95,13 +95,32 @@ export function isInvestment(bucket: Bucket): boolean {
   return !isCashFlow(bucket);
 }
 
-/** True when the row was paid with a credit card, by column or by wording. */
-export function looksLikeCredit(
-  card: string | null,
-  method: string,
-  description: string,
-  rules: Rules,
-): boolean {
-  if (card && card.trim() !== "") return true;
-  return matchesAny([method, description].join(" · "), rules.creditTerms);
+/** Payment methods that settle the question the other way. A card column filled
+ *  next to one of these names the card that was *not* used. */
+const NOT_CREDIT = [
+  "debito", "pix", "ted", "doc", "dinheiro", "especie", "boleto", "transferencia",
+  "deposito", "saque",
+];
+
+/**
+ * True when the row was paid with a credit card.
+ *
+ * The payment-method column decides, in both directions, and the description is
+ * deliberately not consulted. A description carries the wrong kind of evidence:
+ * "pagamento fatura cartão" paid by pix is the bill being settled, not a purchase
+ * on credit, and counting it duplicates a month of card spending against itself.
+ * "imposto limite faturamento anual" was landing on the cards screen for no better
+ * reason than the first six letters of "faturamento".
+ *
+ * A debit-ish method wins over a credit word, so "cartão de débito" is the débito
+ * it says it is. The cost is that "débito automático do cartão de crédito" reads
+ * as débito too — rare in a method column, and the safer way to be wrong.
+ *
+ * With no method column to go on, a filled card column is the remaining signal.
+ */
+export function looksLikeCredit(card: string | null, method: string, rules: Rules): boolean {
+  const m = method.trim();
+  if (m && matchesAny(m, NOT_CREDIT)) return false;
+  if (m && matchesAny(m, rules.creditTerms)) return true;
+  return card != null && card.trim() !== "";
 }

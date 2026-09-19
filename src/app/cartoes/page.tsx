@@ -57,7 +57,7 @@ export default async function CardsPage({
     .reduce((sum, tx) => sum + tx.amount, 0);
   const share = monthExpense > 0 ? total / monthExpense : null;
   const rows = txMonth
-    .filter((tx) => tx.bucket === "expense" && tx.card)
+    .filter((tx) => tx.bucket === "expense" && tx.credit)
     .sort((a, b) => b.amount - a.amount);
 
   /** Card buckets reuse the segment-bar row, which only needs name/amount/share. */
@@ -70,7 +70,7 @@ export default async function CardsPage({
   }));
 
   const bySegment = segmentSlices(
-    txMonth.filter((tx) => Boolean(tx.card)),
+    txMonth.filter((tx) => tx.credit),
     (tx) => tx.bucket === "expense",
   );
 
@@ -92,9 +92,11 @@ export default async function CardsPage({
         <Card>
           <Empty title="Nenhuma despesa de cartão neste mês.">
             <p>
-              O Pulse marca uma despesa como cartão quando existe uma coluna de cartão preenchida,
-              ou quando o meio de pagamento fala em crédito, cartão ou fatura. Se sua planilha usa
-              outra palavra, acrescente ela na configuração.
+              O Pulse conta uma saída como cartão quando a forma de pagamento fala em crédito,
+              cartão ou fatura — ou, na falta dessa coluna, quando existe uma coluna de cartão
+              preenchida. O que a planilha registra como pix, débito, dinheiro ou transferência
+              fica de fora, mesmo que a descrição cite cartão. Se sua planilha usa outra palavra
+              para crédito, acrescente ela na configuração.
             </p>
           </Empty>
         </Card>
@@ -197,7 +199,7 @@ export default async function CardsPage({
                       </span>
                     )}
                   </td>
-                  <td className="py-2.5 pr-3 text-ink-2">{tx.card}</td>
+                  <td className="py-2.5 pr-3 text-ink-2">{tx.card ?? "Crédito"}</td>
                   <td className="py-2.5 pr-3 text-ink-2">{tx.segment}</td>
                   <td className="tnum py-2.5 text-right font-medium text-ink">{brl(tx.amount)}</td>
                 </tr>
@@ -219,7 +221,7 @@ export default async function CardsPage({
 function monthlyCardSpend(transactions: Transaction[]): { key: string; amount: number }[] {
   const byMonth = new Map<string, number>();
   for (const tx of transactions) {
-    if (tx.bucket !== "expense" || !tx.card) continue;
+    if (tx.bucket !== "expense" || !tx.credit) continue;
     const key = monthKey(tx.date);
     byMonth.set(key, (byMonth.get(key) ?? 0) + tx.amount);
   }

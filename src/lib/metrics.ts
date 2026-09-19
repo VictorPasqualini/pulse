@@ -1,5 +1,5 @@
 import type { Transaction } from "@/lib/types";
-import { monthKey, monthRange, weekLabel, weekOfMonth, weeksInMonth } from "@/lib/dates";
+import { daysInMonth, monthKey, monthRange, weekLabel, weekOfMonth, weeksInMonth } from "@/lib/dates";
 import { CATEGORICAL, CATEGORICAL_ALL_PAIRS_CAP } from "@/lib/palette";
 
 /* ------------------------------------------------------------------ shapes */
@@ -61,6 +61,29 @@ export interface InvestPoint {
   yield: number;
   /** Running position at the end of the month. */
   position: number;
+  /** How much the position moved this month: contrib − withdraw + yield. */
+  growth: number;
+  /** growth / last month's position, or null with nothing to grow from. */
+  growthRate: number | null;
+  /**
+   * The slice of `yield` that no row in the sheet actually stated — the gain
+   * implied by a redemption, spread back over the months the money was invested.
+   * The screens use it to mark a figure as an estimate.
+   */
+  estimated: number;
+  /**
+   * Money invested during the month, averaged over its days.
+   *
+   * The denominator of the month's return has to account for *when* the money
+   * arrived. August 2025 opened with R$ 16.876 and took R$ 143.000 on the 7th: read
+   * against the opening balance it returned 9,2%, read against the closing one 0,9%,
+   * and only one of those is a month's interest. Averaging the daily balance gives
+   * the capital that was actually at work, so a month of heavy aportes stops
+   * masquerading as a month of heavy returns.
+   */
+  capital: number;
+  /** yield / capital — the month's return, or null with no capital invested. */
+  rate: number | null;
 }
 
 const MAX_SLOTS = CATEGORICAL.dark.length;
@@ -291,8 +314,8 @@ export function cardBuckets(transactions: Transaction[]): CardBucket[] {
   const byCard = new Map<string, { amount: number; count: number; segments: Map<string, number> }>();
 
   for (const tx of transactions) {
-    if (tx.bucket !== "expense" || !tx.card) continue;
-    const key = tx.card;
+    if (tx.bucket !== "expense" || !tx.credit) continue;
+    const key = tx.card ?? "Crédito";
     const entry = byCard.get(key) ?? { amount: 0, count: 0, segments: new Map() };
     entry.amount += tx.amount;
     entry.count++;
@@ -328,11 +351,21 @@ export interface InvestmentSummary {
   /** What the per-asset rows are keyed by — the screen has to say which. */
   groupedBy: "asset" | "description";
   series: InvestPoint[];
-  /** The month that earned the most; null before anything has yielded. */
-  bestMonth: InvestPoint | null;
-  /** The month that lost the most, and null when no month lost anything —
-   *  "pior mês" naming a smaller gain would read as a loss that never happened. */
-  worstMonth: InvestPoint | null;
+  /**
+   * Yield per month, averaged over every month the portfolio existed.
+   *
+   * This is the figure that answers "quanto isso rende por mês", and it replaces a
+   * "melhor mês" card that could not: a CDB held for six months and redeemed once
+   * pays all six months of interest on the day it is redeemed, so the best month was
+   * never a good month — it was the month the cash landed. The average divides by
+   * every month in the series, including the ones with no yield at all, because a
+   * month holding the money and earning nothing is part of how it performed.
+   */
+  avgMonthlyYield: number | null;
+  /** How many months that average divides by — the card has to say so. */
+  monthsCounted: number;
+  /** The same average as a rate: the mean of the months' own returns. */
+  avgMonthlyRate: number | null;
 }
 
 /** Rows in the per-asset table before the tail is folded into "Outros". */
@@ -347,9 +380,24 @@ export function investmentSummary(transactions: Transaction[]): InvestmentSummar
 
   const byAsset = new Map<
     string,
-    { contrib: number; withdraw: number; yield: number; lastWithdraw: string }
+    {
+      contrib: number;
+      withdraw: number;
+      yield: number;
+      firstContrib: string;
+      lastWithdraw: string;
+    }
   >();
-  const byMonth = new Map<string, { contrib: number; withdraw: number; yield: number }>();
+  type MonthTally = { contrib: number; withdraw: number; yield: number; estimated: number };
+  const byMonth = new Map<string, MonthTally>();
+  const month = (key: string): MonthTally => {
+    let entry = byMonth.get(key);
+    if (!entry) {
+      entry = { contrib: 0, withdraw: 0, yield: 0, estimated: 0 };
+      byMonth.set(key, entry);
+    }
+    return entry;
+  };
 
   /**
    * What one row of this table is.
@@ -366,28 +414,30 @@ export function investmentSummary(transactions: Transaction[]): InvestmentSummar
   for (const tx of invest) {
     const assetKey =
       (grouped === "asset" ? tx.asset?.trim() : "") || tx.description.trim() || tx.segment;
-    const asset = byAsset.get(assetKey) ?? { contrib: 0, withdraw: 0, yield: 0, lastWithdraw: "" };
-    const month = byMonth.get(monthKey(tx.date)) ?? { contrib: 0, withdraw: 0, yield: 0 };
+    const asset =
+      byAsset.get(assetKey) ??
+      { contrib: 0, withdraw: 0, yield: 0, firstContrib: "", lastWithdraw: "" };
+    const key = monthKey(tx.date);
+    const tally = month(key);
 
     if (tx.bucket === "invest_contrib") {
       contrib += tx.amount;
       asset.contrib += tx.amount;
-      month.contrib += tx.amount;
+      tally.contrib += tx.amount;
+      if (!asset.firstContrib || key < asset.firstContrib) asset.firstContrib = key;
     } else if (tx.bucket === "invest_withdraw") {
       withdraw += tx.amount;
       asset.withdraw += tx.amount;
-      month.withdraw += tx.amount;
-      const key = monthKey(tx.date);
+      tally.withdraw += tx.amount;
       if (key > asset.lastWithdraw) asset.lastWithdraw = key;
     } else {
       const signed = tx.flow === "in" ? tx.amount : -tx.amount;
       yieldTotal += signed;
       asset.yield += signed;
-      month.yield += signed;
+      tally.yield += signed;
     }
 
     byAsset.set(assetKey, asset);
-    byMonth.set(monthKey(tx.date), month);
   }
 
   /**
@@ -405,6 +455,15 @@ export function investmentSummary(transactions: Transaction[]): InvestmentSummar
    * data, so an asset bought before the sheet begins and sold inside it is left
    * alone rather than counted as pure gain; and any yield the sheet *did* record for
    * the asset is subtracted first, so an explicit provento is never double-counted.
+   *
+   * The gain is then spread evenly over the months the money was actually invested —
+   * from the first contribution to the last redemption — instead of landing whole in
+   * the month the cash came back. A CDB that paid R$ 9.862,66 after six months earned
+   * it across those six months; booking it all in the sixth invents a spike that never
+   * happened, makes every other month look flat beside it, and turns any monthly
+   * average into a number about one redemption rather than about the portfolio. The
+   * split is even because the sheet says nothing about the accrual curve; it is an
+   * estimate, and `estimated` carries that fact to the screen so it can be labelled.
    */
   for (const v of byAsset.values()) {
     const unnamedGain = v.withdraw - v.contrib - Math.max(0, v.yield);
@@ -412,8 +471,15 @@ export function investmentSummary(transactions: Transaction[]): InvestmentSummar
 
     v.yield += unnamedGain;
     yieldTotal += unnamedGain;
-    const month = byMonth.get(v.lastWithdraw);
-    if (month) month.yield += unnamedGain;
+
+    const from = v.firstContrib && v.firstContrib <= v.lastWithdraw ? v.firstContrib : v.lastWithdraw;
+    const span = monthRange(from, v.lastWithdraw);
+    const share = unnamedGain / span.length;
+    for (const key of span) {
+      const tally = month(key);
+      tally.yield += share;
+      tally.estimated += share;
+    }
   }
 
   const ranked = [...byAsset.entries()]
@@ -452,25 +518,63 @@ export function investmentSummary(transactions: Transaction[]): InvestmentSummar
     });
   }
 
+  // Principal in and out by the day it moved — the raw material for the daily
+  // balance each month's return is measured against.
+  const moves = new Map<string, number>();
+  for (const tx of invest) {
+    if (tx.bucket === "invest_contrib") moves.set(tx.date, (moves.get(tx.date) ?? 0) + tx.amount);
+    else if (tx.bucket === "invest_withdraw")
+      moves.set(tx.date, (moves.get(tx.date) ?? 0) - tx.amount);
+  }
+
   const keys = [...byMonth.keys()].sort();
   const series: InvestPoint[] = [];
   if (keys.length) {
     let running = 0;
+    // Principal and earned-so-far are tracked apart: the daily walk only knows about
+    // principal movements, and a month's own yield is the numerator, never the base.
+    let principal = 0;
+    let carried = 0;
     for (const key of monthRange(keys[0], keys[keys.length - 1])) {
-      const m = byMonth.get(key) ?? { contrib: 0, withdraw: 0, yield: 0 };
-      running += m.contrib - m.withdraw + m.yield;
-      series.push({ key, contrib: m.contrib, withdraw: m.withdraw, yield: m.yield, position: running });
+      const m = byMonth.get(key) ?? { contrib: 0, withdraw: 0, yield: 0, estimated: 0 };
+      const growth = m.contrib - m.withdraw + m.yield;
+      const previous = running;
+      running += growth;
+
+      const days = daysInMonth(key);
+      let sum = 0;
+      for (let day = 1; day <= days; day++) {
+        principal += moves.get(`${key}-${String(day).padStart(2, "0")}`) ?? 0;
+        sum += principal + carried;
+      }
+      const capital = sum / days;
+      carried += m.yield;
+
+      series.push({
+        key,
+        contrib: m.contrib,
+        withdraw: m.withdraw,
+        yield: m.yield,
+        position: running,
+        growth,
+        // A first month grows from nothing, and "+∞%" is not a reading.
+        growthRate: previous > 0 ? growth / previous : null,
+        estimated: m.estimated,
+        capital,
+        rate: capital > 0 ? m.yield / capital : null,
+      });
     }
   }
 
-  const gains = series.filter((p) => p.yield > 0);
-  const losses = series.filter((p) => p.yield < 0);
-  const bestMonth = gains.length ? gains.reduce((best, p) => (p.yield > best.yield ? p : best)) : null;
-  // Only an actual loss can be the "pior mês". With every month in the black the
-  // pair degenerates into best and second-best, and a card reading "Pior mês
-  // +R$ 2,85" tells the reader a loss happened when none did.
-  const worstMonth = losses.length
-    ? losses.reduce((worst, p) => (p.yield < worst.yield ? p : worst))
+  const avgMonthlyYield = series.length
+    ? series.reduce((sum, p) => sum + p.yield, 0) / series.length
+    : null;
+  // The average rate is the mean of the months' rates, not the total over the total:
+  // the chart draws it as the line each bar is read against, so it has to be the
+  // average *of the bars*.
+  const rated = series.filter((p) => p.rate != null);
+  const avgMonthlyRate = rated.length
+    ? rated.reduce((sum, p) => sum + (p.rate ?? 0), 0) / rated.length
     : null;
 
   return {
@@ -482,8 +586,9 @@ export function investmentSummary(transactions: Transaction[]): InvestmentSummar
     assets,
     groupedBy: grouped,
     series,
-    bestMonth,
-    worstMonth,
+    avgMonthlyYield,
+    monthsCounted: series.length,
+    avgMonthlyRate,
   };
 }
 
